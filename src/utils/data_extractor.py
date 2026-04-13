@@ -9,7 +9,7 @@ url = "http://api.semanticscholar.org/graph/v1/paper/search/bulk"
 
 # Define the query parameters
 query_params = {
-    "query": '"generative ai"',
+    "query": '"retrieval augmented generation"',
     "fields": "title,url,publicationTypes,publicationDate,abstract,authors",
     "year": "1950-"
 }
@@ -33,26 +33,43 @@ print("total:", response.get("total", "N/A"))
 print(f"Will retrieve an estimated {response["total"]} documents")
 retrieved = 0
 
+seen_papers = set()
+seen_tokens = set()
 # Write results to json file and get next batch of results
-with open(f"papers.json", "a") as file:
+with open(f"transformers_papers.json", "a") as file:
     while True:
+        if r.status_code != 200:
+            print(f"Erreur API: {r.status_code}")
+            print(r.text[:500])
+            break
         if "data" in response:
-            retrieved += len(response["data"])
-            print(f"Retrieved {retrieved} papers...")
+            count = 0
             for paper in response["data"]:
-                print(json.dumps(paper), file=file)
+                if paper["paperId"] in seen_papers:
+                    print(f"Paper {paper['paperId']} already seen")
+                    continue
+                else : 
+                    seen_papers.add(paper["paperId"])
+                    print(json.dumps(paper), file=file)
+                    count += 1
+            retrieved += count
+            print(f"Retrieved {retrieved} papers...")
         # checks for continuation token to get next batch of results
         if "token" not in response:
             break
+        if response["token"] in seen_tokens:
+            break
+        seen_tokens.add(response["token"])
         next_params = {**query_params, "token": response["token"]}
-        response = requests.get(url, params=next_params, headers=headers).json()
+        r = requests.get(url, params=next_params, headers=headers)
+        response = r.json()
 
 print(f"Done! Retrieved {retrieved} papers total")
 
 #Conversion de NDJSON vers JSON :
 
 
-input_path = "papers.json"          # NDJSON
+input_path = "transformers_papers.json"          # NDJSON
 output_path = "papers_array.json"   # JSON tableau
 
 data = []
